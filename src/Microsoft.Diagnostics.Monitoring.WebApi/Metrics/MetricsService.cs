@@ -8,7 +8,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -120,26 +119,12 @@ namespace Microsoft.Diagnostics.Monitoring.WebApi
                             MetricsStore metricsStore = _store.GetOrCreateStoreFor(process);
                             var processMetrics = new SingleProcessMetricsService(_optionsMonitor,
                                 _counterOptions.CurrentValue, process, metricsStore);
-                            trackedProcesses.Add(processId, processMetrics.StartMetricsPipelineForProcessAsync(stoppingToken));
+                            _ = processMetrics.StartMetricsPipelineForProcessAsync(stoppingToken)
+                                    .ContinueWith(MetricsPipelineCleanUp, new MetricsPipelineState(processId, _store));
                         }
                     }
 
-                    Task delay = Task.Delay(5000, stoppingToken);
-                    Task completedTask = await Task.WhenAny(trackedProcesses.Values.Concat(new [] {delay}));
-                    if (completedTask != delay)
-                    {
-                        SingleProcessMetricsService[] allCompleted = trackedProcesses.Values
-                            .OfType<Task<SingleProcessMetricsService>>()
-                            .Where(task => task.IsCompleted)
-                            .Select(task => task.Result)
-                            .ToArray();
-
-                        foreach (var completed in allCompleted)
-                        {
-                            _store.RemoveMetricsForPid(completed.ProcessId);
-                            trackedProcesses.Remove(completed.ProcessId);
-                        }
-                    }
+                    await Task.Delay(5000, stoppingToken);
                 }
                 catch (Exception e) when (e is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
                 {
@@ -149,6 +134,12 @@ namespace Microsoft.Diagnostics.Monitoring.WebApi
             }
         }
 
+        private record MetricsPipelineState(int ProcessId, MetricsStoreService MetricsService) { }
+        private static void MetricsPipelineCleanUp(Task pipelineTask, object? stateObj)
+        {
+            var state = (MetricsPipelineState)stateObj!;
+            state.MetricsService.RemoveMetricsForPid(state.ProcessId);
+        }
         public override async void Dispose()
         {
             base.Dispose();
