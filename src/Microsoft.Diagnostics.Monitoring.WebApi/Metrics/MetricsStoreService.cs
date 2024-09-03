@@ -28,20 +28,21 @@ namespace Microsoft.Diagnostics.Monitoring.WebApi
         private MetricsStore CreateMetricsStore(IDictionary<string, string>? defaultLabels)
             => new (_logger, _options.Value.MetricCount.GetValueOrDefault(MetricsOptionsDefaults.MetricCount), defaultLabels);
 
-        public MetricsStore GetOrCreateStoreFor(IProcessInfo process)
+        public bool GetOrCreateStoreFor(IProcessInfo process, out MetricsStore? store)
         {
             lock (_metricStores)
             {
                 int key = process.EndpointInfo.ProcessId;
-                if (_metricStores.TryGetValue(key, out MetricsStore? store))
+                bool found = _metricStores.TryGetValue(key, out store);
+                if (found)
                 {
-                    return store;
+                    return true;
                 }
 
                 IDictionary<string, string> processLabels = GetProcessLabels(process);
                 store = CreateMetricsStore(processLabels);
                 _metricStores.Add(key, store);
-                return store;
+                return false;
             }
         }
 

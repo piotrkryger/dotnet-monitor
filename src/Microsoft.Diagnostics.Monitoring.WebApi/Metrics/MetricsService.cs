@@ -101,7 +101,6 @@ namespace Microsoft.Diagnostics.Monitoring.WebApi
 
         private async Task GetMetricsFromMultipleProcessesAsync(CancellationToken stoppingToken)
         {
-            var trackedProcesses = new Dictionary<int, Task>();
             while (!stoppingToken.IsCancellationRequested)
             {
                 stoppingToken.ThrowIfCancellationRequested();
@@ -114,23 +113,23 @@ namespace Microsoft.Diagnostics.Monitoring.WebApi
                     foreach (var process in processes)
                     {
                         int processId = process.EndpointInfo.ProcessId;
-                        if (!trackedProcesses.ContainsKey(processId))
+                        bool metricsAlreadyRegistered = _store.GetOrCreateStoreFor(process, out MetricsStore? metricsStore);
+                        if (!metricsAlreadyRegistered)
                         {
-                            MetricsStore metricsStore = _store.GetOrCreateStoreFor(process);
                             var processMetrics = new SingleProcessMetricsService(_optionsMonitor,
-                                _counterOptions.CurrentValue, process, metricsStore);
+                                _counterOptions.CurrentValue, process, metricsStore!);
                             _ = processMetrics.StartMetricsPipelineForProcessAsync(stoppingToken)
-                                    .ContinueWith(MetricsPipelineCleanUp, new MetricsPipelineState(processId, _store));
+                                .ContinueWith(MetricsPipelineCleanUp, new MetricsPipelineState(processId, _store), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Current);
                         }
                     }
-
-                    await Task.Delay(5000, stoppingToken);
                 }
                 catch (Exception e) when (e is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
                 {
                     //Most likely we failed to resolve the pid or metric configuration change. Attempt to do this again.
-                    await Task.Delay(5000, stoppingToken);
                 }
+
+
+                await Task.Delay(5000, stoppingToken);
             }
         }
 
