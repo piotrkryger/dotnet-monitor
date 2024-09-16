@@ -26,7 +26,7 @@ namespace Microsoft.Diagnostics.Monitoring.WebApi
             _logger = logger;
         }
 
-        public async Task<IEnumerable<IProcessInfo>> GetProcessesAsync(DiagProcessFilter? processFilterConfig, CancellationToken token)
+        public async Task<IEnumerable<IProcessInfo>> GetProcessesAsync(DiagProcessFilter? processFilterConfig, CancellationToken token, bool matchAllFilters = true)
         {
             IEnumerable<IProcessInfo> processes = [];
 
@@ -81,7 +81,14 @@ namespace Microsoft.Diagnostics.Monitoring.WebApi
 
             if (processFilterConfig != null)
             {
-                processes = processes.Where(p => processFilterConfig.Filters.All(c => c.MatchFilter(p)));
+                if (matchAllFilters)
+                {
+                    processes = processes.Where(p => processFilterConfig.Filters.All(c => c.MatchFilter(p)));
+                }
+                else
+                {
+                    processes = processes.Where(p => processFilterConfig.Filters.Any(c => c.MatchFilter(p)));
+                }
             }
 
             return processes.ToArray();

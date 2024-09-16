@@ -108,7 +108,8 @@ namespace Microsoft.Diagnostics.Monitoring.WebApi
                 try
                 {
                     DiagProcessFilter filter = DiagProcessFilter.FromConfiguration(_processFilterMonitor.CurrentValue);
-                    IEnumerable<IProcessInfo> processes = await _services.GetProcessesAsync(filter, stoppingToken);
+                    IEnumerable<IProcessInfo> processes = await _services
+                        .GetProcessesAsync(filter, stoppingToken, matchAllFilters: false);
 
                     foreach (var process in processes)
                     {
